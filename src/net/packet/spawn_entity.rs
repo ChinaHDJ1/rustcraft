@@ -1,9 +1,3 @@
-use crate::net::datatype::*;
-
-pub enum Packets {
-    SpawnEntity(SpawnEntity),
-}
-
 // Spawn Entity
 // Sent by the server when a vehicle or other non-living entity is created.
 // PacketID = 0x00
@@ -21,24 +15,25 @@ pub enum Packets {
 // Velocity X	Short	Same units as Set Entity Velocity.
 // Velocity Y	Short
 // Velocity Z	Short
+
+use crate::net::datatype::datatype::Angle;
+
 pub struct SpawnEntity {
     entity_id: i32,
     entity_uuid: String,
     entity_type: i32,
+
     x: f64,
     y: f64,
     z: f64,
-}
 
-pub enum UncompressedPacket {
-    Length(i32),
-    ID(i32),
-    Data(Vec<u8>),
-}
+    pitch: Angle,
+    yaw: Angle,
+    head_yaw: Angle,
 
-pub enum CompressedPacket {
-    Len(i32),
-    DataLen(i32),
-    ID(i32),
-    Data(Vec<u8>),
+    data: i32,
+
+    velocity_X: i16,
+    velocity_y: i16,
+    velocity_z: i16,
 }

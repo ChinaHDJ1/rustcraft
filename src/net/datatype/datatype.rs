@@ -38,25 +38,18 @@ pub trait Encoder {
     fn encode(&self) -> Result<&[u8], ()>;
 }
 
-// impl Encoder for i8 {
-//     fn encode(&self) -> Result<&[u8], ()> {
-//         let data = [0u8];
+pub struct Angle(i8);
 
-//         Ok(Vec::new())
-//     }
-// }
+pub struct Position {
+    x: i64,
+    y: i64,
+    z: i32,
+}
 
-// pub trait Int16Encoder {
-//     fn encode_short();
-//     fn encode_unsigned_byte();
-// }
-
-// pub trait Int32Encoder {
-//     fn encode_int();
-//     fn encode_var_int();
-// }
-
-// pub trait Int64Encoder {
-//     fn encode_long();
-//     fn encode_var_long();
-// }
+impl Position {
+    fn to_64bit(&self) {
+        let x = self.x & 0x3FFFFFF;
+        let y = self.y & 0x3FFFFFF;
+        let z = self.z & 0xFFF;
+    }
+}

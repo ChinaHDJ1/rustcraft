@@ -1,4 +1,7 @@
-use std::{io, net::SocketAddr};
+use std::{
+    io::{self, Read},
+    net::SocketAddr,
+};
 
 use tokio::{io::AsyncReadExt, net::TcpStream};
 
@@ -58,64 +61,107 @@ impl Session {
     }
 
     pub async fn read_packet(&self, buf: &[u8]) {
-        let reader = PacketReader::new(&buf, self.compressed);
+        let data = Vec::from(buf);
     }
 }
 
-pub struct PacketReader<'a> {
+pub struct PacketReader {
     mark: usize,
-    data: &'a [u8],
     packet_len: usize,
     data_len: usize,
-    compressed: bool,
+    packet_id: i32,
+    data: Vec<u8>,
 }
 
-impl PacketReader<'_> {
-    fn new(data: &[u8], compressed: bool) -> PacketReader {
-        let mut reader = PacketReader {
+impl PacketReader {
+    fn from(data: &[u8], compressed: bool) -> Result<Self, ()> {
+        let mut r = PacketReader {
             mark: 0,
-            data,
-            compressed,
-            packet_len: 0,
             data_len: 0,
+            packet_id: 0,
+            packet_len: 0,
+            data: Vec::from(data),
         };
 
-        reader.read_varint();
+        //下面的步骤是检验包
 
-        reader
+        r.packet_len = r.read_varint()? as usize;
+
+        //非压缩的数据包
+        if !compressed {
+            let packet_id = r.read_varint()?;
+        } else {
+            let data_len = r.read_varint()? as usize;
+
+            let mut da = &r.data[r.mark..data_len + r.mark];
+            let mut decompressed = Vec::new();
+            flate2::read::ZlibDecoder::new(da)
+                .read_to_end(&mut decompressed)
+                .unwrap();
+        }
+
+        //r.data = &r.data[r.mark..r.packet_len];
+        Err(())
     }
 
-    fn read_packet_len() {}
+    fn unvisited_data(&self) -> &[u8] {
+        &self.data[self.mark..self.packet_len]
+    }
 
     fn read_varint(&mut self) -> Result<i32, ()> {
-        const SEGMENT_BITS: u8 = 0x7F;
-        const CONTINUE_BIT: u8 = 0x80;
+        let mut int = 0;
+        let mut pos = 0;
+        let mut current_byte = 0;
+        let SEGMENT_BITS = 0x7F;
+        let CONTINUE_BIT = 0x80;
 
-        let mut value: i32 = 0;
-        let mut position = 0;
         loop {
-            let byte = self.read_byte()?;
-            value |= ((byte & SEGMENT_BITS) as i32) << position;
+            current_byte = self.read_byte().unwrap();
 
-            if (byte & CONTINUE_BIT) == 0 {
+            int |= ((current_byte & SEGMENT_BITS) as i32) << pos;
+
+            if ((current_byte as u8) & CONTINUE_BIT) == 0 {
                 break;
             }
 
-            position += 7;
-
-            if position >= 32 {
-                //panic!("VarInt is too big")
+            pos += 7;
+            if pos >= 32 {
+                //"VarInt is too big"
                 return Err(());
-            };
+            }
         }
 
-        Ok(value)
+        Ok(int)
     }
 
-    fn read_byte(&mut self) -> Result<u8, ()> {
+    fn read_byte(&mut self) -> Option<i8> {
+        let a: Vec<&u8> = self.data.iter().skip(1).collect();
+
+        let mark = self.mark.clone();
+
+        if mark >= self.data.len() {
+            return None;
+        }
+
         self.mark += 1;
-        Ok(self.data[self.mark])
+
+        Some(self.data[mark] as i8)
     }
 
-    fn add_mark_offest(size: i32) {}
+    fn read_bytes(&mut self, count: usize) -> Option<&[u8]> {
+        let mark = self.mark.clone();
+
+        let mut counter = 0;
+        let result: Vec<u8> = self
+            .data
+            .iter()
+            .filter_map(|b| -> Option<u8> {
+                counter += 1;
+
+                Some(*b)
+            })
+            .collect();
+
+        Some(&self.data[mark..(mark + count)])
+    }
 }
